@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
@@ -7,6 +9,7 @@ from database import rest
 
 router = APIRouter()
 bearer = HTTPBearer(auto_error=False)
+logger = logging.getLogger("sistema-alertas.auth")
 
 
 class LoginPayload(BaseModel):
@@ -41,17 +44,23 @@ async def administrator(user: dict = Depends(current_user)) -> dict:
 
 @router.post("/login")
 async def login(payload: LoginPayload, request: Request):
-    username = payload.username.strip().lower()
-    if username == "admin":
-        username = "administrador"
-    rows = await rest(request, "users", query={"select": "id,username,email,password_hash,role,is_active,created_at", "username": f"ilike.{username}", "limit": "1"})
-    user = rows[0] if rows else None
-    if not user or not user["is_active"] or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
     try:
+        username = payload.username.strip().lower()
+        if username == "admin":
+            username = "administrador"
+        rows = await rest(request, "users", query={"select": "id,username,email,password_hash,role,is_active,created_at", "username": f"ilike.{username}", "limit": "1"})
+        user = rows[0] if rows else None
+        if not user or not user["is_active"] or not verify_password(payload.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
         token = create_token(user, request)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Never log the request body: it contains the user's password.
+        logger.exception("Unhandled exception while processing login (%s)", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Error interno al iniciar sesión. Revise los logs del Worker.") from exc
     return {"access_token": token, "token_type": "bearer", "user": public_user(user)}
 
 
