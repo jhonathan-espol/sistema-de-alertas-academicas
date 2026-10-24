@@ -34,8 +34,8 @@ grant all on public.users, public.alerts to service_role;
 -- Cambie estas contraseñas temporales después del primer inicio de sesión.
 insert into public.users (username, email, password_hash, role)
 values
-  ('administrador', 'administrador@alertas.local', 'pbkdf2_sha256$310000$alertas-admin-seed-v1$126979746cc41241e96343fd7f6bb53f95b62829a7e03c0ea04716266072ae64', 'administrador'),
-  ('invitado', 'invitado@alertas.local', 'pbkdf2_sha256$310000$alertas-invitado-seed-v1$6ca5045cbbdd5f615b779bb780fe980271213ed6180aa22621fbb3e48e7351da', 'invitado')
+  ('administrador', 'administrador@alertas.local', 'pbkdf2_sha256$100000$alertas-admin-seed-v1$63004680e14dda4c70e101f524a0081a35696fdaa4d2f44acd3a58b026a4093c', 'administrador'),
+  ('invitado', 'invitado@alertas.local', 'pbkdf2_sha256$100000$alertas-invitado-seed-v1$892f6486c556c084e11a1bb1f05a0a2d560db9529609900dcd7518b2436cce1f', 'invitado')
 on conflict (username) do nothing;
 
 -- No se crean políticas anon/authenticated: todas las operaciones pasan

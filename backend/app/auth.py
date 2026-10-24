@@ -12,7 +12,9 @@ import time
 from typing import Any
 
 
-ITERATIONS = 310_000
+# Cloudflare Workers Web Crypto rejects PBKDF2 counts above 100,000.
+ITERATIONS = 100_000
+MAX_WORKERS_ITERATIONS = 100_000
 TOKEN_MINUTES = 60
 
 
@@ -23,6 +25,9 @@ async def _derive_password(password: str, salt: str, iterations: int) -> bytes:
         from pyodide.ffi import to_js
     except ImportError:
         return hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), iterations)
+
+    if iterations > MAX_WORKERS_ITERATIONS:
+        raise ValueError("Este hash supera el máximo PBKDF2 admitido por Cloudflare Workers")
 
     encoder = TextEncoder.new()
     key = await crypto.subtle.importKey(
