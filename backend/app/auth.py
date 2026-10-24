@@ -1,40 +1,73 @@
+"""Hash de contraseña y tokens de acceso sin dependencias nativas."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
 import os
-from datetime import datetime, timedelta, timezone
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from dotenv import load_dotenv
-
-load_dotenv()
-
-SECRET_KEY = os.getenv("SECRET_KEY", "cambiar_en_produccion_clave_secreta_muy_segura")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import secrets
+import time
+from typing import Any
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+ITERATIONS = 310_000
+TOKEN_MINUTES = 60
 
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    salt = secrets.token_urlsafe(18)
+    derived = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), ITERATIONS).hex()
+    return f"pbkdf2_sha256${ITERATIONS}${salt}${derived}"
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-def decode_token(token: str):
+def verify_password(password: str, encoded: str) -> bool:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
+        algorithm, rounds, salt, expected = encoded.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        derived = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), int(rounds)).hex()
+        return hmac.compare_digest(derived, expected)
+    except (ValueError, TypeError):
+        return False
+
+
+def _b64(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
+
+
+def _secret(request: Any) -> str:
+    bindings = request.scope.get("env")
+    value = getattr(bindings, "JWT_SECRET", None) if bindings is not None else None
+    if value is None and isinstance(bindings, dict):
+        value = bindings.get("JWT_SECRET")
+    return str(value or os.getenv("JWT_SECRET", ""))
+
+
+def create_token(user: dict[str, Any], request: Any) -> str:
+    secret = _secret(request)
+    if len(secret) < 32:
+        raise RuntimeError("Configure JWT_SECRET con al menos 32 caracteres en Cloudflare")
+    now = int(time.time())
+    header = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    payload = _b64(json.dumps({"sub": user["id"], "iat": now, "exp": now + TOKEN_MINUTES * 60}, separators=(",", ":")).encode())
+    signing_input = f"{header}.{payload}"
+    signature = hmac.new(secret.encode(), signing_input.encode(), hashlib.sha256).digest()
+    return f"{signing_input}.{_b64(signature)}"
+
+
+def decode_token(token: str, request: Any) -> dict[str, Any] | None:
+    try:
+        secret = _secret(request)
+        header, payload, signature = token.split(".")
+        signing_input = f"{header}.{payload}"
+        expected = _b64(hmac.new(secret.encode(), signing_input.encode(), hashlib.sha256).digest())
+        if not secret or not hmac.compare_digest(signature, expected):
+            return None
+        data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        if int(data["exp"]) <= int(time.time()):
+            return None
+        return data
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None

@@ -1,59 +1,60 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from app import database, auth
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
+
+from app.auth import create_token, decode_token, verify_password
+from app.database import rest
 
 router = APIRouter()
+bearer = HTTPBearer(auto_error=False)
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str
-    user: dict
+class LoginPayload(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    conn = database.get_connection()
+def public_user(user: dict) -> dict:
+    return {key: user.get(key) for key in ("id", "username", "email", "role", "is_active", "created_at")}
+
+
+async def current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+) -> dict:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Inicie sesión para continuar")
+    claims = decode_token(credentials.credentials, request)
+    if not claims:
+        raise HTTPException(status_code=401, detail="La sesión venció; vuelva a iniciar sesión")
+    rows = await rest(request, "users", query={"select": "id,username,email,role,is_active,created_at", "id": f"eq.{claims['sub']}", "limit": "1"})
+    if not rows or not rows[0]["is_active"]:
+        raise HTTPException(status_code=401, detail="La cuenta está inactiva o ya no existe")
+    return rows[0]
+
+
+async def administrator(user: dict = Depends(current_user)) -> dict:
+    if user["role"] != "administrador":
+        raise HTTPException(status_code=403, detail="Se requiere el rol Administrador")
+    return user
+
+
+@router.post("/login")
+async def login(payload: LoginPayload, request: Request):
+    username = payload.username.strip().lower()
+    if username == "admin":
+        username = "administrador"
+    rows = await rest(request, "users", query={"select": "id,username,email,password_hash,role,is_active,created_at", "username": f"ilike.{username}", "limit": "1"})
+    user = rows[0] if rows else None
+    if not user or not user["is_active"] or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, username, email, password_hash, role, is_active FROM users WHERE username = %s",
-                (form_data.username,),
-            )
-            user = cur.fetchone()
-    finally:
-        conn.close()
-
-    if not user or not auth.verify_password(form_data.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario o contraseña incorrectos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user["is_active"]:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario inactivo",
-        )
-
-    access_token = auth.create_access_token(
-        data={"sub": user["username"], "user_id": str(user["id"]), "role": user["role"]}
-    )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": str(user["id"]),
-            "username": user["username"],
-            "email": user["email"],
-            "role": user["role"],
-        },
-    }
+        token = create_token(user, request)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"access_token": token, "token_type": "bearer", "user": public_user(user)}
 
 
-@router.post("/logout")
-async def logout():
-    return {"message": "Sesión cerrada"}
+@router.get("/me")
+async def me(user: dict = Depends(current_user)):
+    return public_user(user)

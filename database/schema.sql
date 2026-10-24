@@ -1,52 +1,42 @@
--- Esquema de base de datos para db_alertas (Supabase / PostgreSQL)
--- Ejecutar en el SQL Editor de Supabase
+-- Ejecutar una sola vez en el SQL Editor del proyecto Supabase db_alertas.
+-- Las tablas usan RLS sin políticas públicas. La API Python accede con la
+-- SUPABASE_SERVICE_ROLE_KEY guardada como secreto de Cloudflare.
 
--- Tabla de usuarios (gestión completa desde la aplicación)
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(100) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'invitado' CHECK (role IN ('administrador', 'invitado')),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.users (
+  id uuid primary key default gen_random_uuid(),
+  username text not null unique,
+  email text not null unique,
+  password_hash text not null,
+  role text not null default 'invitado' check (role in ('administrador', 'invitado')),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Tabla de alertas del sistema
-CREATE TABLE IF NOT EXISTS alerts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    severity VARCHAR(50) NOT NULL DEFAULT 'media' CHECK (severity IN ('baja', 'media', 'alta', 'critica')),
-    status VARCHAR(50) NOT NULL DEFAULT 'activa' CHECK (status IN ('activa', 'resuelta', 'archivada')),
-    created_by UUID REFERENCES users(id),
-    assigned_to UUID REFERENCES users(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.alerts (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  severity text not null default 'media' check (severity in ('baja', 'media', 'alta', 'critica')),
+  status text not null default 'activa' check (status in ('activa', 'resuelta', 'archivada')),
+  created_by uuid references public.users(id) on delete set null,
+  assigned_to uuid references public.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Habilitar RLS (Row Level Security) opcional - se puede gestionar desde la app
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
+alter table public.users enable row level security;
+alter table public.alerts enable row level security;
+revoke all on public.users, public.alerts from anon, authenticated;
+grant all on public.users, public.alerts to service_role;
 
--- Políticas básicas (ajustar según necesidades de producción)
-CREATE POLICY "Allow all for authenticated users" ON users FOR ALL USING (true);
-CREATE POLICY "Allow all for authenticated users" ON alerts FOR ALL USING (true);
+-- PBKDF2-SHA256; formato: pbkdf2_sha256$iteraciones$sal$hash_hex.
+-- Cambie estas contraseñas temporales después del primer inicio de sesión.
+insert into public.users (username, email, password_hash, role)
+values
+  ('administrador', 'administrador@alertas.local', 'pbkdf2_sha256$310000$alertas-admin-seed-v1$126979746cc41241e96343fd7f6bb53f95b62829a7e03c0ea04716266072ae64', 'administrador'),
+  ('invitado', 'invitado@alertas.local', 'pbkdf2_sha256$310000$alertas-invitado-seed-v1$6ca5045cbbdd5f615b779bb780fe980271213ed6180aa22621fbb3e48e7351da', 'invitado')
+on conflict (username) do nothing;
 
--- Insertar usuarios por defecto
--- Contraseñas: admin / invitado123 (hasheadas con bcrypt para desarrollo)
-INSERT INTO users (username, email, password_hash, role, is_active) VALUES
-    ('admin', 'admin@alertas.local', '$2b$12$LQv3c1yqBWVHxCd0L3aOiO6F9f.J7fQ6R4L8Y8X9Z0A1B2C3D4E5F', 'administrador', TRUE),
-    ('invitado', 'invitado@alertas.local', '$2b$12$K4m7p2n9r8w1y5a3s6d8f0g2h4j6k8l', 'invitado', TRUE)
-ON CONFLICT (username) DO NOTHING;
-
--- Insertar algunas alertas de ejemplo
-INSERT INTO alerts (title, description, severity, status, created_by, assigned_to) VALUES
-    ('Alerta de temperatura elevada', 'Se detectó temperatura superior al umbral en el sensor A1', 'alta', 'activa',
-     (SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM users WHERE username = 'admin')),
-    ('Falla de conectividad nodo 3', 'Pérdida de comunicación con el nodo remoto 3', 'critica', 'activa',
-     (SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM users WHERE username = 'invitado')),
-    ('Mantenimiento programado servidor', 'Mantenimiento preventivo del servidor principal este fin de semana', 'baja', 'archivada',
-     (SELECT id FROM users WHERE username = 'admin'), (SELECT id FROM users WHERE username = 'admin'))
-ON CONFLICT DO NOTHING;
+-- No se crean políticas anon/authenticated: todas las operaciones pasan
+-- por la API y su clave de servicio privada, nunca por el navegador.
