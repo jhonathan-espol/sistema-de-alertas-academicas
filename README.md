@@ -1,18 +1,18 @@
 # Sistema de Alertas Académicas
 
-Aplicación de alertas tempranas con **Next.js**, **Python/FastAPI** y **PostgreSQL de Supabase**. La interfaz y la API se publican como dos Cloudflare Workers independientes. No requiere Docker ni un servidor local para producción.
+Aplicación de alertas tempranas con **Next.js**, **Python/FastAPI** y **PostgreSQL de Supabase**. La interfaz y la API transaccional se publican como dos Cloudflare Workers. Los análisis científicos se ejecutan en un servicio Python nativo separado, porque dependen de scikit-learn, XGBoost y SHAP. Ningún servicio requiere Docker.
 
 ## Arquitectura
 
 ```text
 Navegador ── HTTPS ──> Cloudflare Worker: Next.js
-                             │ API REST + token JWT
-                             ▼
-                       Cloudflare Worker: FastAPI (Python)
-                             │ Data API HTTPS (PostgREST)
-                             ▼
-                       Supabase PostgreSQL
-                       tablas public.users y public.alerts
+     │                       │ API REST + token JWT
+     │ análisis con JWT       ▼
+     └───────────────> Python/FastAPI de análisis (Render)
+                             │ scripts intactos + artefactos privados
+             Cloudflare Worker: FastAPI ──> Supabase Data API
+                             │                    │
+                             └────────────────────┴──> Supabase PostgreSQL + Storage
 ```
 
 Las credenciales de aplicación se guardan en PostgreSQL; las contraseñas se derivan con PBKDF2-SHA256. El navegador nunca recibe la clave secreta de Supabase. La API comprueba el rol en cada petición, y el rol Administrador es obligatorio para la gestión de usuarios.
@@ -24,6 +24,7 @@ Las credenciales de aplicación se guardan en PostgreSQL; las contraseñas se de
 - Administración de cuentas, roles, estado, creación y cambio de contraseñas.
 - API FastAPI desplegable como Python Worker.
 - Interfaz Next.js desplegable en Cloudflare Workers mediante OpenNext.
+- Carga y validación de archivos Excel, ejecución de análisis en segundo plano e historial de resultados.
 - Tablas protegidas con RLS y sin políticas para acceso público.
 
 ## Accesos temporales iniciales
@@ -42,6 +43,7 @@ Al completar el despliegue, inicia sesión como administrador y cambia ambas con
 - Cuenta GitHub con acceso a `jhonathan-espol/sistema-de-alertas-academicas`.
 - Proyecto de Supabase y acceso al SQL Editor y a Settings → API Keys.
 - Cuenta Cloudflare con Workers habilitado y acceso a Workers Builds.
+- Servicio Python nativo en Render para los análisis (se configura con comandos de build/start, sin Docker).
 - Node.js 20+ para el build del frontend en Cloudflare; Python 3.13+ (uv) para el Worker de FastAPI.
 - Un secreto aleatorio de al menos 32 caracteres para firmar sesiones (`JWT_SECRET`).
 
@@ -74,7 +76,7 @@ git status
 Verifica que `git ls-files frontend` ahora muestre `frontend/package.json`, `frontend/src/...` y los demás archivos, no una sola entrada `frontend`. Luego incluye los cambios del proyecto y publica la rama `main`:
 
 ```powershell
-git add README.md .gitignore database backend frontend
+git add README.md .gitignore database backend frontend training_service
 git commit -m "Construye sistema de alertas académicas"
 git push -u github-academicas main
 ```
@@ -92,7 +94,13 @@ Si Git indica que `github-academicas` ya existe, actualiza su URL con `git remot
 
 El SQL es idempotente para las tablas y los usuarios iniciales. `ON CONFLICT (username) DO NOTHING` no restablece contraseñas existentes al volverlo a ejecutar.
 
-## 3. Desplegar la API Python en Cloudflare
+## 3. Preparar el historial y el almacenamiento de análisis
+
+1. En Supabase **SQL Editor**, ejecuta [`database/training_runs.sql`](database/training_runs.sql). Crea la tabla `public.training_runs` con RLS habilitado y sin acceso para `anon` ni `authenticated`.
+2. En **Storage**, crea un bucket llamado `training-artifacts` y déjalo **privado**. No crees políticas de lectura pública. El servicio Python lo administra con la clave secreta de servidor.
+3. El archivo Excel cargado se valida y procesa en el servicio Python; no se guarda como objeto. El libro de resultados, resumen y gráficos se conservan en ese bucket privado.
+
+## 4. Desplegar la API de aplicación en Cloudflare
 
 1. En Cloudflare abre **Workers & Pages → Create application → GitHub**, autoriza Cloudflare en GitHub y elige el repositorio `jhonathan-espol/sistema-de-alertas-academicas`.
 2. Crea un Worker llamado `sistema-alertas-api` (debe coincidir con `name` en `backend/wrangler.jsonc`), selecciona la rama de producción `main` y abre **Settings → Builds**.
@@ -118,7 +126,30 @@ El SQL es idempotente para las tablas y los usuarios iniciales. `ON CONFLICT (us
 
 Cloudflare Builds necesita permiso para publicar Workers en la cuenta. Usa la conexión de GitHub de Cloudflare o un API token de Cloudflare limitado a Workers Scripts: Edit y Workers Builds: Read. No guardes el token en el repositorio.
 
-## 4. Desplegar Next.js en Cloudflare
+## 5. Desplegar el servicio de análisis Python
+
+Cloudflare Python Workers no es el entorno para este cálculo de scikit-learn, XGBoost y SHAP. El servicio de análisis corre en un servicio Python nativo de Render; no uses el runtime Docker.
+
+1. En Render selecciona **New → Web Service**, conecta el repositorio `jhonathan-espol/sistema-de-alertas-academicas` y la rama `main`.
+2. Configura la raíz del repositorio como directorio de servicio (vacío o `.`), runtime **Python 3**, comando de build `pip install -r training_service/requirements.txt` y comando de inicio `uvicorn training_service.app:app --host 0.0.0.0 --port $PORT`.
+3. Agrega estas variables de entorno en Render. Marca como secretas las claves y el secreto JWT:
+
+   | Nombre | Valor |
+   |---|---|
+   | `SUPABASE_URL` | Project URL del mismo proyecto Supabase usado por la API |
+   | `SUPABASE_SECRET_KEY` | Clave Secret `sb_secret_...` (o `SUPABASE_SERVICE_ROLE_KEY` si usas la clave antigua) |
+   | `JWT_SECRET` | El mismo secreto JWT activo del Worker `sistema-alertas-api` |
+   | `ALLOWED_ORIGINS` | Origen del frontend, por ejemplo `https://alertas-academicas-web.jhonathanespol.workers.dev` |
+   | `TRAINING_STORAGE_BUCKET` | `training-artifacts` (opcional; ese es el valor predeterminado) |
+
+4. Despliega el servicio. Comprueba que `https://<servicio-render>/health` responda `{"status":"ok","service":"academic-training"}`. Copia la URL base HTTPS asignada.
+5. En Cloudflare, en la configuración de build de `alertas-academicas-web`, define `NEXT_PUBLIC_TRAINING_API_URL` con esa URL base. Guarda la variable y vuelve a desplegar el frontend para incorporarla al bundle.
+
+Render admite despliegues FastAPI con runtime Python nativo, comandos de build/start y sin Docker ([guía oficial de FastAPI en Render](https://render.com/docs/deploy-fastapi)). El servicio valida el JWT de la aplicación y consulta en Supabase que la cuenta siga activa y tenga rol Administrador; la clave de Supabase nunca llega al navegador.
+
+Los scripts originales permanecen sin modificaciones. El servicio invoca `analisis_preliminar.py` con las rutas de entrada/salida que acepta como argumentos. Para `complemento.py`, genera una copia temporal de ejecución que adapta sus rutas absolutas; el archivo fuente se conserva intacto. La validación requiere un `.xlsx` con las columnas del conjunto académico y los periodos `2023-2`, `2024-1`, `2024-2`, `2025-1` y `2025-2`.
+
+## 6. Desplegar Next.js en Cloudflare
 
 1. En **Workers & Pages → Create application → GitHub**, conecta de nuevo el mismo repositorio y rama `main` para crear el segundo Worker, llamado `alertas-academicas-web`.
 2. En **Settings → Builds**, configura `frontend` como raíz del proyecto y confirma que el nombre coincida con [`frontend/wrangler.jsonc`](frontend/wrangler.jsonc).
@@ -129,18 +160,18 @@ Cloudflare Builds necesita permiso para publicar Workers en la cuenta. Usa la co
    ```
 
    Usa `npx wrangler deploy` como **Deploy command**. Si Cloudflare pide un comando de instalación, usa `npm ci`. El script `cf:build` genera `.open-next` y Wrangler publica el artefacto según `frontend/wrangler.jsonc`.
-4. Antes del build de producción, define `NEXT_PUBLIC_API_URL` como **variable de build** con el dominio del Worker de API copiado en el paso anterior, sin barra final. Ejemplo: `https://sistema-alertas-api.<cuenta>.workers.dev`.
+4. Antes del build de producción, define `NEXT_PUBLIC_API_URL` como **variable de build** con el dominio del Worker de API copiado en el paso anterior, sin barra final. Ejemplo: `https://sistema-alertas-api.<cuenta>.workers.dev`. Define también `NEXT_PUBLIC_TRAINING_API_URL` con la URL base de Render, sin barra final.
 5. Guarda y despliega. Cloudflare construirá la aplicación Next.js con OpenNext y la publicará como Worker.
 6. Abre el dominio asignado al Worker web. Inicia sesión con una de las cuentas temporales y cambia las contraseñas en **Usuarios**.
 7. Opcional: en **Worker → Settings → Domains & Routes**, agrega tu dominio propio y configura sus registros DNS en Cloudflare.
 
-Configura también `NEXT_PUBLIC_API_URL` en el entorno de Preview si vas a habilitar despliegues de preview. Es una URL pública; no pongas secretos en variables `NEXT_PUBLIC_*`.
+Configura ambas URLs públicas en el entorno de Preview si habilitas previews y agrega su origen al `ALLOWED_ORIGINS` de Render. No pongas secretos en variables `NEXT_PUBLIC_*`.
 
 Guías oficiales: [Cloudflare Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/), [OpenNext para Next.js](https://developers.cloudflare.com/workers/framework-guides/web-apps/opennext/), [Python Workers y FastAPI](https://developers.cloudflare.com/workers/languages/python/packages/fastapi/), [claves API de Supabase](https://supabase.com/docs/guides/getting-started/api-keys) y [Data API de Supabase](https://supabase.com/docs/guides/api).
 
-## 5. Despliegues posteriores
+## 7. Despliegues posteriores
 
-Al conectar ambos Workers a la misma rama de GitHub, cada push a `main` vuelve a publicar los dos proyectos. Si el build automático no detecta los cambios en una carpeta, confirma que cada Worker tenga su propio directorio raíz (`backend` o `frontend`) y su comando correspondiente.
+Al conectar los dos Workers y el servicio Render a la misma rama de GitHub, cada push a `main` puede volver a desplegar los proyectos. Si el build automático de Cloudflare no detecta cambios, confirma que cada Worker tenga su propio directorio raíz (`backend` o `frontend`) y su comando correspondiente.
 
 ## Estructura
 
@@ -152,7 +183,11 @@ backend/
   app/routes/                 Inicio de sesión, usuarios y alertas
   pyproject.toml              Dependencias Python / uv
   wrangler.jsonc              Configuración Cloudflare
+training_service/
+  app.py                      API de carga, validación e historial de análisis
+  requirements.txt            Dependencias de ML para Python nativo
 database/schema.sql           Tablas, RLS y cuentas iniciales
+database/training_runs.sql    Historial de ejecuciones
 frontend/
   src/app/                    Páginas Next.js
   src/components/             Componentes de interfaz
@@ -181,5 +216,7 @@ frontend/
 - El esquema no crea políticas públicas. La clave de Supabase no se expone al cliente Next.js.
 - `JWT_SECRET` debe ser distinto por entorno y mantenerse privado. Si se rota, las sesiones existentes tendrán que iniciar sesión de nuevo.
 - Las credenciales incluidas son temporales y públicas en este repositorio: cambia ambas contraseñas inmediatamente después del primer acceso de producción.
-- Las pestañas Entrenamiento, Resultados y Configuración son la interfaz inicial del proyecto. La ejecución del modelo de aprendizaje automático y el envío de notificaciones externas requieren conectar los procesos de análisis/servicios correspondientes.
+- El análisis genera evaluación y gráficos retrospectivos; los scripts no guardan un estimador serializado para predicción individual en tiempo real.
+- Los resultados quedan en un bucket Storage privado y solo un Administrador autenticado puede listarlos o descargarlos.
+- `analisis_preliminar.py` y `complemento.py` se conservan intactos; el servicio usa una copia temporal de `complemento.py` para resolver sus rutas absolutas.
 - No se utiliza Docker.

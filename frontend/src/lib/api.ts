@@ -1,4 +1,5 @@
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const TRAINING_API_BASE_URL = (process.env.NEXT_PUBLIC_TRAINING_API_URL || "").replace(/\/$/, "");
 
 export async function apiRequest(
   endpoint: string,
@@ -67,6 +68,48 @@ export interface LoginResponse {
     role: string;
   };
 }
+
+export interface TrainingRun {
+  id: string;
+  dataset_name: string;
+  dataset_rows: number;
+  dataset_bytes: number;
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  stage: string;
+  result_summary?: { mejor?: [string, string]; mejorA?: [string, string]; prevalencia_val?: number; best_metrics?: Record<string, number> } | null;
+  artifacts: string[];
+  error?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+async function trainingRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  if (!TRAINING_API_BASE_URL) throw new Error("El servicio de entrenamiento aún no está configurado.");
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const headers = new Headers(options.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (!isFormData && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const response = await fetch(`${TRAINING_API_BASE_URL}${endpoint}`, { ...options, headers });
+  if (!response.ok) {
+    const errorData: { detail?: string } = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Error ${response.status}`);
+  }
+  return response;
+}
+
+export const trainingApi = {
+  list: async () => (await trainingRequest("/api/training/runs")).json() as Promise<TrainingRun[]>,
+  get: async (id: string) => (await trainingRequest(`/api/training/runs/${id}`)).json() as Promise<TrainingRun>,
+  start: async (file: File) => {
+    const body = new FormData(); body.set("file", file);
+    return (await trainingRequest("/api/training/runs", { method: "POST", body })).json() as Promise<TrainingRun>;
+  },
+  file: async (id: string, name: string) =>
+    (await trainingRequest(`/api/training/runs/${id}/files/${encodeURIComponent(name)}`)).blob(),
+};
 
 export const authApi = {
   login: (username: string, password: string) =>
