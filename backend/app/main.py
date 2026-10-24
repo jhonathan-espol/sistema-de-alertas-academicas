@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Keep imports relative to `app/` so Pywrangler can bundle them as Worker modules.
 from routes import alerts, auth, users
 
-app = FastAPI(title="Sistema de Alertas API", version="1.0.0")
+app = FastAPI(title="Sistema de Alertas API ", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
