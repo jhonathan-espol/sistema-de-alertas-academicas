@@ -54,7 +54,7 @@ async def login(payload: LoginPayload, request: Request):
         rows = await rest(request, "users", query={"select": "id,username,email,password_hash,role,is_active,created_at", "username": f"ilike.{username}", "limit": "1"})
         user = rows[0] if rows else None
         stage = "verificar contraseña"
-        if not user or not user["is_active"] or not verify_password(payload.password, user["password_hash"]):
+        if not user or not user["is_active"] or not await verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
         stage = "crear token de sesión"
         token = create_token(user, request)

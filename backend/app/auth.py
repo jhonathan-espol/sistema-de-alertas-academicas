@@ -16,18 +16,47 @@ ITERATIONS = 310_000
 TOKEN_MINUTES = 60
 
 
-def hash_password(password: str) -> str:
+async def _derive_password(password: str, salt: str, iterations: int) -> bytes:
+    """Derive a PBKDF2-SHA256 key using Workers Web Crypto or CPython hashlib."""
+    try:
+        from js import Object, TextEncoder, Uint8Array, crypto
+        from pyodide.ffi import to_js, to_py
+    except ImportError:
+        return hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), iterations)
+
+    encoder = TextEncoder.new()
+    key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(password),
+        "PBKDF2",
+        False,
+        to_js(["deriveBits"]),
+    )
+    parameters = to_js(
+        {
+            "name": "PBKDF2",
+            "hash": "SHA-256",
+            "salt": encoder.encode(salt),
+            "iterations": iterations,
+        },
+        dict_converter=Object.fromEntries,
+    )
+    derived = await crypto.subtle.deriveBits(parameters, key, 256)
+    return bytes(to_py(Uint8Array.new(derived)))
+
+
+async def hash_password(password: str) -> str:
     salt = secrets.token_urlsafe(18)
-    derived = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), ITERATIONS).hex()
+    derived = (await _derive_password(password, salt, ITERATIONS)).hex()
     return f"pbkdf2_sha256${ITERATIONS}${salt}${derived}"
 
 
-def verify_password(password: str, encoded: str) -> bool:
+async def verify_password(password: str, encoded: str) -> bool:
     try:
         algorithm, rounds, salt, expected = encoded.split("$", 3)
         if algorithm != "pbkdf2_sha256":
             return False
-        derived = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), int(rounds)).hex()
+        derived = (await _derive_password(password, salt, int(rounds))).hex()
         return hmac.compare_digest(derived, expected)
     except (ValueError, TypeError):
         return False

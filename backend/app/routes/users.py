@@ -42,7 +42,8 @@ async def create_user(payload: UserCreate, request: Request, _: dict = Depends(a
         raise HTTPException(status_code=422, detail="El usuario solo puede incluir letras, números, punto, @, guion y guion bajo")
     if payload.role not in {"administrador", "invitado"}:
         raise HTTPException(status_code=422, detail="Rol no válido")
-    rows = await rest(request, "users", method="POST", body={"username": username, "email": str(payload.email).lower(), "password_hash": hash_password(payload.password), "role": payload.role}, prefer="return=representation")
+    password_hash = await hash_password(payload.password)
+    rows = await rest(request, "users", method="POST", body={"username": username, "email": str(payload.email).lower(), "password_hash": password_hash, "role": payload.role}, prefer="return=representation")
     return public_user(rows[0])
 
 
@@ -69,7 +70,8 @@ async def update_user(user_id: str, payload: UserUpdate, request: Request, actor
 
 @router.post("/{user_id}/change-password")
 async def change_password(user_id: str, payload: PasswordChange, request: Request, _: dict = Depends(administrator)):
-    rows = await rest(request, "users", method="PATCH", query={"id": f"eq.{user_id}", "select": "id"}, body={"password_hash": hash_password(payload.password), "updated_at": datetime.now(timezone.utc).isoformat()}, prefer="return=representation")
+    password_hash = await hash_password(payload.password)
+    rows = await rest(request, "users", method="PATCH", query={"id": f"eq.{user_id}", "select": "id"}, body={"password_hash": password_hash, "updated_at": datetime.now(timezone.utc).isoformat()}, prefer="return=representation")
     if not rows:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"message": "Contraseña actualizada"}
