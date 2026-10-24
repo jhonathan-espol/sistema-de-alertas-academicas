@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.database import rest
-from app.routes.auth import current_user
+from database import rest
+from routes.auth import current_user
 
 router = APIRouter()
 

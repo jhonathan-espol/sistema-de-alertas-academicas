@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import alerts, auth, users
+# In Python Workers, the directory containing `main.py` is the import root.
+# Keep imports relative to `app/` so Pywrangler can bundle them as Worker modules.
+from routes import alerts, auth, users
 
 app = FastAPI(title="Sistema de Alertas API", version="1.0.0")
 app.add_middleware(

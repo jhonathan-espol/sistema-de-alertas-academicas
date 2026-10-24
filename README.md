@@ -96,6 +96,7 @@ El SQL es idempotente para las tablas y los usuarios iniciales. `ON CONFLICT (us
 
 1. En Cloudflare abre **Workers & Pages → Create application → GitHub**, autoriza Cloudflare en GitHub y elige el repositorio `jhonathan-espol/sistema-de-alertas-academicas`.
 2. Crea un Worker llamado `sistema-alertas-api` (debe coincidir con `name` en `backend/wrangler.jsonc`), selecciona la rama de producción `main` y abre **Settings → Builds**.
+   Si el log muestra que Workers Builds espera `sistema-de-alertas-academicas`, corrige el nombre del Worker/proyecto en Cloudflare a `sistema-alertas-api` antes de desplegar, para que el endpoint documentado y el Worker publicado coincidan.
 3. Configura el directorio raíz como `backend`, deja vacío el comando de Build y establece el comando de Deploy:
 
    ```bash

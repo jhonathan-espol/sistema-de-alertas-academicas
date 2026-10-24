@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
-from app.auth import hash_password
-from app.database import rest
-from app.routes.auth import administrator, public_user
+from auth import hash_password
+from database import rest
+from routes.auth import administrator, public_user
 
 router = APIRouter()
 USERNAME = re.compile(r"^[\w.@-]{3,100}$", re.UNICODE)

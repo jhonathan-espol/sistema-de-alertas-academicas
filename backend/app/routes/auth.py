@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app.auth import create_token, decode_token, verify_password
-from app.database import rest
+from auth import create_token, decode_token, verify_password
+from database import rest
 
 router = APIRouter()
 bearer = HTTPBearer(auto_error=False)
