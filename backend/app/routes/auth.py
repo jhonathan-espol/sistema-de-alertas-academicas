@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -44,14 +45,18 @@ async def administrator(user: dict = Depends(current_user)) -> dict:
 
 @router.post("/login")
 async def login(payload: LoginPayload, request: Request):
+    stage = "normalizar usuario"
     try:
         username = payload.username.strip().lower()
         if username == "admin":
             username = "administrador"
+        stage = "consultar usuario en Supabase"
         rows = await rest(request, "users", query={"select": "id,username,email,password_hash,role,is_active,created_at", "username": f"ilike.{username}", "limit": "1"})
         user = rows[0] if rows else None
+        stage = "verificar contraseña"
         if not user or not user["is_active"] or not verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+        stage = "crear token de sesión"
         token = create_token(user, request)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -59,7 +64,13 @@ async def login(payload: LoginPayload, request: Request):
         raise
     except Exception as exc:
         # Never log the request body: it contains the user's password.
-        logger.exception("Unhandled exception while processing login (%s)", type(exc).__name__)
+        logger.error(
+            "Unhandled exception while processing login at %s (%s): %s\n%s",
+            stage,
+            type(exc).__name__,
+            exc,
+            traceback.format_exc(),
+        )
         raise HTTPException(status_code=500, detail="Error interno al iniciar sesión. Revise los logs del Worker.") from exc
     return {"access_token": token, "token_type": "bearer", "user": public_user(user)}
 
