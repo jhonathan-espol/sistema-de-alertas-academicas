@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sistema-de-alertas-academicas",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true }
+  // Secretos (NO van en este archivo): DATABASE_URL y AUTH_SECRET
+  //   npx wrangler secret put DATABASE_URL
+  //   npx wrangler secret put AUTH_SECRET
+}

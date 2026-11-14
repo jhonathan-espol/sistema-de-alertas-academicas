@@ -1,0 +1,28 @@
+{
+  "name": "sistema-de-alertas-academicas",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/con-env.mjs dev",
+    "build": "next build",
+    "start": "node scripts/con-env.mjs start",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+  },
+  "dependencies": {
+    "jose": "^6.2.17",
+    "next": "16.4.6",
+    "postgres": "^3.4.7",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.17",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5",
+    "wrangler": "^4.162.0"
+  }
+}

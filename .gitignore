@@ -1,0 +1,28 @@
+# Secretos
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Datos personales y resultados derivados: NUNCA se suben al repositorio
+ml/cache/
+ml/salidas/
+*.xls
+*.xlsx
+*.csv
+*.pkl
+*.joblib
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / Next.js / Cloudflare
+node_modules/
+.next/
+.open-next/
+.wrangler/
+next-env.d.ts
+*.tsbuildinfo
