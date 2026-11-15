@@ -1,20 +1,37 @@
 import "server-only";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import postgres from "postgres";
 
 export type Sql = postgres.Sql;
 
 const enWorkers = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
 
-function crear(): Sql {
+/**
+ * Cadena de conexión:
+ * - En Cloudflare se usa Hyperdrive (binding HYPERDRIVE de wrangler.jsonc). Hyperdrive mantiene las
+ *   conexiones con Supabase y el Worker le habla por un canal interno sin TLS; conectar directamente
+ *   desde el Worker al pooler de Supabase no funciona (su certificado no es de una autoridad pública).
+ * - En local (Node) se usa DATABASE_URL del archivo .env.
+ */
+function destino(): { url: string; sinTls: boolean } {
+  if (enWorkers) {
+    const env = getCloudflareContext().env as { HYPERDRIVE?: { connectionString: string } };
+    if (!env.HYPERDRIVE?.connectionString) throw new Error("Falta el binding HYPERDRIVE en el Worker");
+    return { url: env.HYPERDRIVE.connectionString, sinTls: true };
+  }
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("Falta la variable DATABASE_URL");
-  const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
+  return { url, sinTls: /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url) };
+}
+
+function crear(): Sql {
+  const { url, sinTls } = destino();
   return postgres(url, {
     max: enWorkers ? 1 : 5,
-    prepare: false, // obligatorio con el pooler de Supabase en modo transacción (puerto 6543)
+    prepare: false, // compatible con los poolers en modo transacción
     idle_timeout: 20,
     connect_timeout: 15,
-    ssl: local ? false : "require",
+    ssl: sinTls ? false : "require",
     onnotice: () => {},
   });
 }

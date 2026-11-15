@@ -218,35 +218,46 @@ La aplicación se despliega como un **Worker** con el adaptador OpenNext (`web/w
    - **Root directory** (*Advanced settings*): `web`
    - **Build command**: `npx opennextjs-cloudflare build`
    - **Deploy command**: `npx opennextjs-cloudflare deploy`
-4. Pulsa **Create and deploy**. El primer despliegue terminará, pero la aplicación aún no podrá conectarse: faltan los secretos.
-5. En el Worker → **Settings → Variables and Secrets → Add**, crea dos variables de tipo **Secret**:
-   - `DATABASE_URL` = la cadena **Transaction pooler** (puerto 6543) de Supabase
+4. Pulsa **Create and deploy**.
+5. En el Worker → **Settings → Variables and Secrets → Add**, crea una variable de tipo **Secret** (si la creas como texto normal, el siguiente despliegue la borra):
    - `AUTH_SECRET` = una clave nueva de 48+ caracteres (`python -c "import secrets; print(secrets.token_urlsafe(48))"`); no reutilices la de tu `.env` local
-6. Pulsa **Deploy** para que los secretos entren en vigor y abre la dirección `https://sistema-de-alertas-academicas.<tu-subdominio>.workers.dev`.
+6. Abre la dirección `https://sistema-de-alertas-academicas.<tu-subdominio>.workers.dev`.
+
+### Conexión a la base: Hyperdrive
+
+En Cloudflare la aplicación **no usa `DATABASE_URL`**: se conecta a Supabase a través de **Hyperdrive** (binding `HYPERDRIVE` en `web/wrangler.jsonc`). Un Worker no puede conectarse directamente al pooler de Supabase, porque su certificado no lo emite una autoridad pública y el runtime lo rechaza; Hyperdrive mantiene esa conexión y el Worker le habla por un canal interno. Está incluido en el plan gratuito.
+
+La configuración ya está creada (`alertas-db`) y su id figura en `wrangler.jsonc`; el id no es un secreto. Si cambias la contraseña de la base o migras de proyecto en Supabase, actualízala desde `web`:
+
+```powershell
+npx wrangler login
+npx wrangler hyperdrive update 0f05fdef0d404106bf9fd6cb0d5469d1 --connection-string="postgresql://postgres.<ref>:<CLAVE>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+```
+
+Para crear una nueva desde cero: `npx wrangler hyperdrive create alertas-db --connection-string="..."` y copia el id que devuelve en `wrangler.jsonc`.
 
 Desde ese momento, cada `git push` a `main` vuelve a compilar y desplegar automáticamente.
 
 ### Opción B: desplegar desde la laptop con Wrangler
 
-OpenNext recomienda ejecutar el empaquetado en **WSL** (Linux en Windows); en PowerShell puede fallar.
+Probado en Windows 11 con PowerShell (OpenNext avisa de que recomienda WSL, pero compila y despliega).
 
 ```bash
 cd web
 npm install
 npx wrangler login
 npm run deploy
-npx wrangler secret put DATABASE_URL    # pega la cadena Transaction pooler (6543)
-npx wrangler secret put AUTH_SECRET     # pega la clave de sesiones
+npx wrangler secret put AUTH_SECRET     # pega la clave de sesiones (solo la primera vez)
 ```
 
 ### Ajustes en Cloudflare
 
 - **Dominio propio** (opcional): Worker → *Settings → Domains & Routes → Add → Custom domain*. El dominio debe estar en tu cuenta de Cloudflare.
-- **Variables**: nunca escribas `DATABASE_URL` ni `AUTH_SECRET` en `wrangler.jsonc`; siempre como *Secret*.
+- **Variables**: nunca escribas `AUTH_SECRET` ni una cadena de conexión real en `wrangler.jsonc`. El `localConnectionString` que aparece ahí es un valor de ejemplo que exigen las herramientas para emular el Worker en local.
 - **Compatibilidad**: `wrangler.jsonc` ya declara `nodejs_compat` (necesario para el cliente de PostgreSQL) y una `compatibility_date` reciente.
 - **Registros**: Worker → *Observability → Logs* para ver errores en vivo.
 - **Límite de CPU**: el plan gratuito de Workers concede 10 ms de CPU por petición. La verificación de contraseñas (PBKDF2, 100 000 iteraciones) es la operación más costosa; si el inicio de sesión devuelve el error **1102 (Worker exceeded resource limits)**, la solución es el plan Workers Paid. No lo he podido comprobar en tu cuenta.
-- **Conexiones**: la aplicación abre una conexión por petición contra el pooler de Supabase (modo transacción, `prepare: false`). Si más adelante hay mucho tráfico, puedes añadir **Hyperdrive** de Cloudflare delante de Supabase.
+- **Conexiones**: la aplicación abre una conexión por petición contra Hyperdrive, que reutiliza las conexiones reales con Supabase.
 
 ### Comprobación final en producción
 

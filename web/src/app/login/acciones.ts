@@ -21,7 +21,10 @@ export async function iniciarSesion(_: Estado, datos: FormData): Promise<Estado>
     });
   } catch (e) {
     console.error("Error de acceso", e);
-    return { error: "No se pudo conectar con la base de datos. Revisa DATABASE_URL." };
+    // Se muestra solo el tipo de fallo (nunca la cadena de conexión) para poder diagnosticarlo.
+    const x = e as { code?: string; name?: string; message?: string };
+    const causa = x?.code ?? (x?.message?.startsWith("Falta") ? x.message : x?.name) ?? "desconocida";
+    return { error: `No se pudo conectar con la base de datos (causa: ${causa}).` };
   }
   if (id === null) return { error: "Usuario o contraseña incorrectos." };
   await abrirSesion(id);

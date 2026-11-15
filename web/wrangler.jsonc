@@ -5,8 +5,17 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
-  "observability": { "enabled": true }
-  // Secretos (NO van en este archivo): DATABASE_URL y AUTH_SECRET
-  //   npx wrangler secret put DATABASE_URL
+  "observability": { "enabled": true },
+  // Conexión a PostgreSQL (Supabase) a través de Hyperdrive. El id no es un secreto:
+  // la cadena de conexión queda guardada en Cloudflare, no en este archivo.
+  // "localConnectionString" solo se usa al emular el Worker en local (wrangler dev / preview) y las
+  // herramientas de despliegue exigen que exista; es un valor de ejemplo, no una credencial real.
+  // Para emular con tu base local define CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE.
+  "hyperdrive": [{
+    "binding": "HYPERDRIVE",
+    "id": "0f05fdef0d404106bf9fd6cb0d5469d1",
+    "localConnectionString": "postgresql://postgres:postgres@localhost:5432/db_alertas"
+  }]
+  // Secreto (NO va en este archivo): AUTH_SECRET
   //   npx wrangler secret put AUTH_SECRET
 }
