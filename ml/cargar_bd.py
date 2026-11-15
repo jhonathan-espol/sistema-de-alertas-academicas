@@ -27,9 +27,10 @@ USUARIOS_INICIALES = [  # contraseñas temporales: la aplicación obliga a cambi
     ("Docente", "Docente", "DOCENTE", "docente123"),
 ]
 CONFIG_INICIAL = [
-    ("institucion", "Instituto Superior Tecnológico", "Nombre que se muestra en la aplicación"),
+    ("institucion", "Institución de Educación Superior", "Nombre que se muestra en la aplicación"),
     ("capacidad_semanal", "40", "Estudiantes que el equipo de bienestar puede contactar por semana"),
     ("mostrar_identidad_docente", "no", "Si los docentes pueden ver cédula y nombre (si/no)"),
+    ("seudonimizar", "si", "Ocultar cédulas y nombres de estudiantes en toda la aplicación (si/no)"),
 ]
 
 

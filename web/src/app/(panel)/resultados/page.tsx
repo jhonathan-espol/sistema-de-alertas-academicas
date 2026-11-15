@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Filtros } from "@/components/Filtros";
 import { Seguimiento } from "@/components/Seguimiento";
 import { conDb } from "@/lib/db";
-import { TEXTO_NIVEL, TEXTO_VIA, elegirPeriodo, fecha, leerConfig, listarPeriodos, pct, prob } from "@/lib/datos";
+import { TEXTO_NIVEL, TEXTO_VIA, elegirPeriodo, fecha, leerConfig, listarPeriodos, pct, prob, puedeVerIdentidad } from "@/lib/datos";
 import { exigirUsuario } from "@/lib/sesion";
 
 const POR_PAGINA = 25;
@@ -19,7 +19,7 @@ export default async function Resultados({ searchParams }: { searchParams: Promi
     const per = elegirPeriodo(periodos, sp.periodo);
     const carrera = sp.carrera ?? "", nivel = sp.nivel ?? "", q = (sp.q ?? "").trim();
     const config = await leerConfig(sql);
-    const verIdentidad = u.rol === "ADMINISTRADOR" || config.mostrar_identidad_docente === "si";
+    const verIdentidad = puedeVerIdentidad(config, u.rol);
     const patron = `%${q}%`;
     const f = sql`periodo = ${per.periodo} AND (${carrera} = '' OR carrera = ${carrera}) AND (${nivel} = '' OR nivel_riesgo = ${nivel})
                   AND (${q} = '' OR carrera ILIKE ${patron} OR id_estudiante ILIKE ${patron}

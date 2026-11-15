@@ -146,7 +146,9 @@ Todos los resultados (tablas y figuras) quedan en `ml/salidas/` y se muestran en
 
 Lectura: el modelo ordena mejor y alerta con más precisión, pero la mejora en AUC-PR no alcanza a ser estadísticamente concluyente con una cohorte de prueba de este tamaño, y a igual carga detecta los mismos casos que la regla simple. La revisión de equidad señala a la **jornada nocturna** (tasa de falsos negativos 0,43 frente a 0,32 general), que debe revisarse antes de usar el sistema. Las variables con más peso son la inasistencia de las semanas 3-4 y la proporción de actividades entregadas en la plataforma.
 
-**Privacidad.** El dataset de modelado no contiene cédulas ni nombres: cada estudiante se identifica con un código seudónimo (hash con sal local). La llave `ml/cache/llave_identidad.csv` permite al equipo autorizado saber a quién corresponde cada código y **no sale del equipo**. Si la institución autoriza guardar identidades en la base, carga con `INCLUIR_IDENTIDAD=1`; el administrador decide en *Configuración* si los docentes las ven.
+**Privacidad.** El dataset de modelado no contiene cédulas ni nombres: cada estudiante se identifica con un código seudónimo (hash con sal local). La llave `ml/cache/llave_identidad.csv` permite al equipo autorizado saber a quién corresponde cada código y **no sale del equipo**. Si la institución autoriza guardar identidades en la base, carga con `INCLUIR_IDENTIDAD=1` (en PowerShell: `$env:INCLUIR_IDENTIDAD="1"; python -m ml.cargar_bd`).
+
+**Interruptor de seudonimización.** El administrador tiene en la barra superior un interruptor que vale para toda la aplicación y para todos los usuarios: encendido (valor inicial), todas las páginas muestran el código seudónimo; apagado, muestran cédula y nombre. Solo tiene efecto si la base se cargó con identidades. Con el interruptor apagado, los docentes ven identidades únicamente si además se permite en *Configuración*.
 
 ---
 

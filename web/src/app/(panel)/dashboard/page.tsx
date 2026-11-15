@@ -3,7 +3,7 @@ import { Filtros } from "@/components/Filtros";
 import { BarrasRayadas, Lineas, Medidor, Sankey } from "@/components/graficos";
 import { COLOR_NIVEL } from "@/lib/colores";
 import { conDb } from "@/lib/db";
-import { TEXTO_NIVEL, TEXTO_SEGUIMIENTO, TEXTO_VIA, elegirPeriodo, fecha, leerConfig, listarPeriodos, pct, prob } from "@/lib/datos";
+import { TEXTO_NIVEL, TEXTO_SEGUIMIENTO, TEXTO_VIA, elegirPeriodo, fecha, leerConfig, listarPeriodos, pct, prob, puedeVerIdentidad } from "@/lib/datos";
 import { exigirUsuario } from "@/lib/sesion";
 
 const siglas = (carrera: string) => {
@@ -39,8 +39,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       sql`SELECT id, id_estudiante, identificacion, nombre, carrera, jornada, nivel_riesgo, probabilidad::float, pct_inasistencia_d28::float inasist,
                  estado_seguimiento, factores FROM alertas WHERE ${f} AND nivel_riesgo IN ('ALTO', 'DETECTADO')
           ORDER BY (nivel_riesgo = 'DETECTADO') DESC, puntaje DESC NULLS LAST LIMIT 7`,
-      sql`SELECT count(*)::int n, count(*) FILTER (WHERE nivel_riesgo = 'ALTO')::int altos, avg(pct_inasistencia_d28)::float inasist
-          FROM alertas WHERE periodo = (SELECT max(periodo) FROM periodos WHERE periodo < ${per.periodo})`,
+      // periodo anterior con los MISMOS filtros de carrera y jornada (una carrera nueva no tiene con qué compararse)
+      sql`SELECT count(*)::int n, count(*) FILTER (WHERE nivel_riesgo = 'ALTO')::int altos,
+                 count(*) FILTER (WHERE nivel_riesgo IN ('ALTO', 'MEDIO', 'BAJO'))::int evaluados
+          FROM alertas WHERE periodo = (SELECT max(periodo) FROM periodos WHERE periodo < ${per.periodo})
+            AND (${carrera} = '' OR carrera = ${carrera}) AND (${jornada} = '' OR jornada = ${jornada})`,
     ]);
     return { periodos, per, carrera, jornada, config, carreras, jornadas, niveles, flujo1, flujo2, porCarrera, historico, prioridad, anterior: anterior[0] };
   });
@@ -63,9 +66,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const evaluados = (n.ALTO ?? 0) + (n.MEDIO ?? 0) + (n.BAJO ?? 0);
   const inasist = d.niveles.reduce((s, x) => s + (x.inasist ?? 0) * x.n, 0) / Math.max(d.niveles.filter((x) => x.inasist !== null).reduce((s, x) => s + x.n, 0), 1);
   const atendidos = d.niveles.filter((x) => ["ALTO", "DETECTADO"].includes(x.nivel_riesgo)).reduce((s, x) => s + x.atendidos, 0);
-  const verIdentidad = u.rol === "ADMINISTRADOR" || d.config.mostrar_identidad_docente === "si";
+  const verIdentidad = puedeVerIdentidad(d.config, u.rol);
   const pctAlto = evaluados ? (100 * (n.ALTO ?? 0)) / evaluados : 0;
-  const pctAltoAnt = d.anterior?.n ? (100 * d.anterior.altos) / d.anterior.n : null;
+  const pctAltoAnt = d.anterior?.evaluados ? (100 * d.anterior.altos) / d.anterior.evaluados : null;
+  const filtrado = Boolean(d.carrera || d.jornada);
   const parcial = !cerrado && (per.dias_observados ?? 0) < 28;
 
   const colJornada = [...new Set(d.flujo1.map((x) => x.de as string))].sort().map((j) => ({ id: `j:${j}`, etiqueta: titulo(j), color: "#2563eb" }));
@@ -110,7 +114,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <div className="kpi">
                   <div className="rotulo"><span className="punto" style={{ background: COLOR_NIVEL.ALTO }} />Riesgo alto</div>
                   <div className="valor num">{n.ALTO ?? 0}<span className="delta" style={{ color: "#b91c1c" }}>{pct(pctAlto, 0)}</span></div>
-                  <div className="nota">{pctAltoAnt === null ? "de los evaluados" : `Frente a ${pct(pctAltoAnt, 0)} del periodo anterior`}</div>
+                  <div className="nota">{pctAltoAnt !== null ? `Frente a ${pct(pctAltoAnt, 0)} del periodo anterior${filtrado ? " con los mismos filtros" : ""}`
+                    : filtrado ? "Sin datos del periodo anterior para estos filtros" : "de los evaluados"}</div>
                 </div>
                 <div className="kpi">
                   <div className="rotulo"><span className="punto" style={{ background: COLOR_NIVEL.DETECTADO }} />Casos detectados</div>

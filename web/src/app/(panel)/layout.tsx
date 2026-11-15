@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
+import { SwitchIdentidad } from "@/components/SwitchIdentidad";
+import { leerConfig, seudonimizado } from "@/lib/datos";
 import { conDb } from "@/lib/db";
 import { exigirUsuario } from "@/lib/sesion";
 import { salir } from "../login/acciones";
@@ -9,10 +11,11 @@ export const dynamic = "force-dynamic";
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const u = await exigirUsuario();
   if (u.debe_cambiar_password) redirect("/cambiar-clave");
-  const altos = await conDb(async (sql) => {
+  const { altos, seudo, hayIdentidades } = await conDb(async (sql) => {
     const [f] = await sql`SELECT count(*)::int AS n FROM alertas WHERE estado_periodo = 'EN_CURSO' AND nivel_riesgo = 'ALTO'`;
-    return f?.n ?? 0;
-  }).catch(() => 0);
+    const [i] = await sql`SELECT EXISTS (SELECT 1 FROM alertas WHERE nombre IS NOT NULL OR identificacion IS NOT NULL) AS hay`;
+    return { altos: (f?.n ?? 0) as number, seudo: seudonimizado(await leerConfig(sql)), hayIdentidades: Boolean(i?.hay) };
+  }).catch(() => ({ altos: 0, seudo: true, hayIdentidades: false }));
   return (
     <div className="app">
       <Sidebar usuario={{ nombre: u.nombre, usuario: u.usuario, rol: u.rol }} altos={altos} salir={salir} />
@@ -22,6 +25,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="M14 14l4 4" strokeLinecap="round" /></svg>
             <input name="q" placeholder="Buscar estudiante o carrera…" aria-label="Buscar" />
           </form>
+          {u.rol === "ADMINISTRADOR" && <SwitchIdentidad seudonimizado={seudo} hayIdentidades={hayIdentidades} />}
         </div>
         {children}
       </div>

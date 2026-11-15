@@ -16,7 +16,7 @@ export function FormularioConfig({ editable, valores }: {
       </label>
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
         <input type="checkbox" name="mostrar_identidad_docente" defaultChecked={valores.mostrar_identidad_docente} disabled={!editable} style={{ marginTop: 3 }} />
-        <span>Mostrar cédula y nombre a los docentes<br /><span className="sub">Solo tiene efecto si las alertas se cargaron con identidad (INCLUIR_IDENTIDAD=1). Por defecto ven un código seudónimo.</span></span>
+        <span>Mostrar cédula y nombre a los docentes<br /><span className="sub">Solo aplica cuando el interruptor “Datos seudonimizados” de la barra superior está apagado y las alertas se cargaron con identidad (INCLUIR_IDENTIDAD=1). Con el interruptor encendido, nadie ve identidades.</span></span>
       </label>
       {e?.error && <div className="aviso error">{e.error}</div>}
       {e?.ok && <div className="aviso exito">{e.ok}</div>}

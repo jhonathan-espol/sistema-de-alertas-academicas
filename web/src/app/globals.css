@@ -68,6 +68,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 8px 12px; width: 300px; color: var(--tinta-3);
 }
 .buscador input { border: 0; background: transparent; outline: none; width: 100%; }
+.switch-identidad { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.switch-identidad small { font-weight: 400; color: var(--tinta-3); }
+.switch {
+  position: relative; width: 40px; height: 22px; border-radius: 11px; border: 0; padding: 0; cursor: pointer;
+  background: var(--ambar); transition: background .15s; flex: none;
+}
+.switch.activo { background: var(--azul); }
+.switch i { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch.activo i { transform: translateX(18px); }
+.switch:disabled { opacity: .6; cursor: progress; }
+.switch:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
 .cabecera {
   background: var(--panel); border-bottom: 1px solid var(--borde); padding: 22px 32px;
   display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap;

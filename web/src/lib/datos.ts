@@ -21,7 +21,17 @@ export async function leerConfig(sql: Sql) {
   return Object.fromEntries(filas.map((f) => [f.clave, f.valor])) as Record<string, string>;
 }
 
-export const NIVELES = ["ALTO", "MEDIO", "BAJO", "DETECTADO"] as const;
+/**
+ * Regla única de visibilidad de cédulas y nombres, usada por todas las páginas.
+ * - `seudonimizar` es el interruptor global del administrador. Si no existe o vale "si", nadie ve identidades.
+ * - Con el interruptor apagado las ve el administrador, y el docente solo si además está permitido
+ *   en Configuración (`mostrar_identidad_docente`).
+ */
+export const seudonimizado = (config: Record<string, string>) => config.seudonimizar !== "no";
+export const puedeVerIdentidad = (config: Record<string, string>, rol: string) =>
+  !seudonimizado(config) && (rol === "ADMINISTRADOR" || config.mostrar_identidad_docente === "si");
+
+export const NIVELES =["ALTO", "MEDIO", "BAJO", "DETECTADO"] as const;
 export const TEXTO_NIVEL: Record<string, string> = {
   ALTO: "Riesgo alto", MEDIO: "Riesgo medio", BAJO: "Riesgo bajo", DETECTADO: "Detectado", SIN_PUNTAJE: "Sin puntaje",
 };

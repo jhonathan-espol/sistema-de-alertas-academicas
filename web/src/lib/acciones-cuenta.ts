@@ -110,6 +110,16 @@ export async function guardarConfiguracion(_: Estado, datos: FormData): Promise<
   return { ok: "Configuración guardada." };
 }
 
+/** Interruptor global: seudonimizar (true) o mostrar cédulas y nombres reales (false). Solo administrador. */
+export async function cambiarSeudonimizacion(datos: FormData): Promise<void> {
+  await exigirAdmin();
+  const valor = datos.get("seudonimizar") === "si" ? "si" : "no";
+  await conDb((sql) => sql`INSERT INTO configuracion (clave, valor, descripcion)
+      VALUES ('seudonimizar', ${valor}, 'Ocultar cédulas y nombres de estudiantes en toda la aplicación (si/no)')
+      ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, actualizado_en = now()`);
+  revalidatePath("/", "layout");
+}
+
 const ESTADOS = ["PENDIENTE", "CONTACTADO", "EN_ACOMPANAMIENTO", "CERRADO"];
 
 export async function guardarSeguimiento(_: Estado, datos: FormData): Promise<Estado> {
