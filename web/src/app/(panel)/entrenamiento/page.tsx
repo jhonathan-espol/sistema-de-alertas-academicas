@@ -196,7 +196,7 @@ export default async function Entrenamiento({ searchParams }: { searchParams: Pr
           </details>
         </section>
 
-        <Comandos />
+        <!--<Comandos />-->
       </div>
     </>
   );
