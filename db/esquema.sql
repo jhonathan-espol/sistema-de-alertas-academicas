@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS alertas (
     UNIQUE (periodo, id_estudiante)
 );
 CREATE INDEX IF NOT EXISTS alertas_periodo_ix ON alertas (periodo, nivel_riesgo);
+-- Desglose de la asistencia dentro de la ventana: {total, asignaturas[], semanas[], clases[]}
+ALTER TABLE alertas ADD COLUMN IF NOT EXISTS detalle_asistencia JSONB;
 
 CREATE TABLE IF NOT EXISTS ejecuciones_modelo (
     id          BIGSERIAL PRIMARY KEY,

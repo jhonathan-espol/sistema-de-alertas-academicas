@@ -263,6 +263,35 @@ def predictores_actividades(act, base):
     return g.merge(ev, on=k, how="left")
 
 
+def detalle_asistencia(V, dias_obs):
+    """Desglose de la asistencia de cada estudiante dentro de su ventana (lo que la aplicación muestra en
+    «Detalle del estudiante»): por asignatura, por semana y clase por clase. Usa exactamente las mismas
+    clases que los predictores, de modo que sus totales coinciden con los porcentajes de la alerta.
+    dias_obs: serie indexada por (periodo, cedula) con los días observados de la ventana."""
+    w = V[V.en_ventana].copy()
+    w["aus"] = w.horas_clase - w.horas_asistidas
+    w["semana"] = ((w.dia - 1) // 7 + 1).clip(upper=4).astype(int)
+    w["nombre"] = [str(n)[len(str(c)):].strip(" -") if str(n).startswith(str(c)) else str(n) for n, c in zip(w.asignatura, w.asignatura_cod)]
+    pct = lambda a, h: round(100 * float(a) / float(h), 1) if h else None  # noqa: E731
+    filas = []
+    for (periodo, cedula), g in w.sort_values(["asignatura_cod", "fecha", "nro_clase"]).groupby(["periodo", "cedula"]):
+        fin = int(dias_obs.get((periodo, cedula), DIA_CORTE))
+        asig = [dict(codigo=c, nombre=a.nombre.iloc[0].title(), clases=int(len(a)), horas=float(a.horas_clase.sum()),
+                     asistidas=float(a.horas_asistidas.sum()), ausentes=float(a.aus.sum()), pct=pct(a.aus.sum(), a.horas_clase.sum()))
+                for c, a in g.groupby("asignatura_cod")]
+        sem = [dict(semana=int(s), dia_desde=(int(s) - 1) * 7 + 1, dia_hasta=min(DIA_CORTE if s == 4 else int(s) * 7, fin),
+                    horas=float(a.horas_clase.sum()), ausentes=float(a.aus.sum()), pct=pct(a.aus.sum(), a.horas_clase.sum()))
+               for s, a in g.groupby("semana")]
+        dias = g.groupby("fecha").horas_asistidas.sum()
+        clases = [dict(fecha=str(r.fecha.date()), dia=int(r.dia), semana=int(r.semana), codigo=r.asignatura_cod,
+                       horas=float(r.horas_clase), asistidas=float(r.horas_asistidas))
+                  for r in g.sort_values(["fecha", "asignatura_cod", "nro_clase"]).itertuples()]
+        total = dict(horas=float(g.horas_clase.sum()), asistidas=float(g.horas_asistidas.sum()), ausentes=float(g.aus.sum()),
+                     pct=pct(g.aus.sum(), g.horas_clase.sum()), dias_con_clase=int(len(dias)), dias_asistidos=int((dias > 0).sum()))
+        filas.append(dict(periodo=periodo, cedula=cedula, detalle=dict(total=total, asignaturas=asig, semanas=sem, clases=clases)))
+    return pd.DataFrame(filas)
+
+
 # ------------------------------------------------------------------ principal
 def main():
     sal = _sal()
@@ -353,6 +382,11 @@ def main():
     V["en_ventana"] = (V.dia >= 1) & (V.fecha <= V.fecha_corte) & V.con_control
     pa = predictores_asistencia(V)
     base = base.merge(pa, on=["periodo", "cedula"], how="left")
+
+    # desglose por asignatura, semana y clase de cada estudiante (para la página de detalle de la aplicación)
+    det = detalle_asistencia(V, base.set_index(["periodo", "cedula"]).dias_observados)
+    det.insert(1, "id_estudiante", det.cedula.map(lambda c: seudonimo(c, sal)))
+    det.drop(columns="cedula").to_pickle(SALIDAS / "detalle_asistencia.pkl")
 
     # Mismos predictores de asistencia, pero recortados al número de días que lleva observada la cohorte
     # en curso: sirven para entrenar un modelo comparable mientras su ventana de 28 días no se completa.

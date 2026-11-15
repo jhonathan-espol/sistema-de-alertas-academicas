@@ -114,7 +114,11 @@ export default async function Resultados({ searchParams }: { searchParams: Promi
                   const nombre = d.verIdentidad && r.nombre ? titulo(r.nombre) : r.id_estudiante;
                   return (
                     <tr key={r.id}>
-                      <td><div style={{ fontWeight: 600 }}>{nombre}</div><div className="sub">{d.verIdentidad && r.identificacion ? r.identificacion : r.id_estudiante}</div></td>
+                      <td>
+                        <Link href={`/resultados/${r.id}`} title="Ver el detalle de asistencia por asignatura y por semana" style={{ fontWeight: 600 }}>{nombre}</Link>
+                        <div className="sub">{d.verIdentidad && r.identificacion ? r.identificacion : r.id_estudiante}</div>
+                        <Link className="btn btn-mini" href={`/resultados/${r.id}`} style={{ marginTop: 6 }}>Ver detalle</Link>
+                      </td>
                       <td>{titulo(r.carrera ?? "")}<div className="sub">{r.paralelo} · {titulo(r.jornada ?? "")}</div></td>
                       <td><span className={`chip ${r.nivel_riesgo}`}>{TEXTO_NIVEL[r.nivel_riesgo]}</span></td>
                       <td className="d num">{prob(r.probabilidad)}</td>

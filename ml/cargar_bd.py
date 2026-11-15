@@ -135,6 +135,16 @@ def main():
         """, filas, page_size=500)
     cur.execute("DELETE FROM alertas WHERE (periodo, id_estudiante) NOT IN %s", (tuple((f[0], f[1]) for f in filas),))
 
+    # ---------------- desglose de asistencia por asignatura, semana y clase (página de detalle del estudiante)
+    ruta_det = SALIDAS / "detalle_asistencia.pkl"
+    if ruta_det.exists():
+        det = pd.read_pickle(ruta_det).drop_duplicates(["periodo", "id_estudiante"])
+        cur.execute("UPDATE alertas SET detalle_asistencia = NULL")
+        execute_values(cur, """UPDATE alertas a SET detalle_asistencia = v.d::jsonb
+                               FROM (VALUES %s) AS v(periodo, id_estudiante, d)
+                               WHERE a.periodo = v.periodo AND a.id_estudiante = v.id_estudiante""",
+                       [(r.periodo, r.id_estudiante, json.dumps(r.detalle, ensure_ascii=False)) for r in det.itertuples()], page_size=300)
+
     # ---------------- periodos y resultados del entrenamiento
     res = json.load(open(SALIDAS / "resultados.json", encoding="utf-8"))
     resumen = {x["periodo"]: x for x in json.load(open(SALIDAS / "resumen_puntuacion.json", encoding="utf-8"))}

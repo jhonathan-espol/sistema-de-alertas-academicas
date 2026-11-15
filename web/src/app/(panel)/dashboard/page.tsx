@@ -177,7 +177,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   {d.prioridad.map((p, i) => (
                     <tr key={p.id}>
                       <td className="num sub">{i + 1}</td>
-                      <td><div style={{ fontWeight: 600 }}>{verIdentidad && p.nombre ? titulo(p.nombre) : p.id_estudiante}</div><div className="sub">{titulo(p.carrera ?? "")}</div></td>
+                      <td><Link href={`/resultados/${p.id}`} title="Ver el detalle de asistencia" style={{ fontWeight: 600 }}>{verIdentidad && p.nombre ? titulo(p.nombre) : p.id_estudiante}</Link><div className="sub">{titulo(p.carrera ?? "")}</div></td>
                       <td><span className={`chip ${p.nivel_riesgo}`}>{p.nivel_riesgo === "DETECTADO" ? "Detectado" : prob(p.probabilidad)}</span></td>
                       <td className="d num">{pct(p.inasist, 0)}</td>
                     </tr>

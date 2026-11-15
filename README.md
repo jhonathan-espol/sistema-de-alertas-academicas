@@ -148,6 +148,8 @@ Lectura: el modelo ordena mejor y alerta con más precisión, pero la mejora en 
 
 **Privacidad.** El dataset de modelado no contiene cédulas ni nombres: cada estudiante se identifica con un código seudónimo (hash con sal local). La llave `ml/cache/llave_identidad.csv` permite al equipo autorizado saber a quién corresponde cada código y **no sale del equipo**. Si la institución autoriza guardar identidades en la base, carga con `INCLUIR_IDENTIDAD=1` (en PowerShell: `$env:INCLUIR_IDENTIDAD="1"; python -m ml.cargar_bd`).
 
+**Detalle del estudiante.** En *Resultados*, el nombre de cada estudiante (o el botón *Ver detalle*) abre una página con el origen de cada porcentaje de su alerta: horas dictadas, asistidas y ausentes por asignatura, inasistencia por semana, la explicación de cada cálculo y el registro clase por clase. El desglose lo genera el pipeline (`ml/salidas/detalle_asistencia.pkl`) con las mismas clases que usan los predictores y se guarda en la columna `detalle_asistencia` de la tabla `alertas`. Los estudiantes retirados no tienen detalle porque SIGA los quita de los registros de asistencia.
+
 **Interruptor de seudonimización.** El administrador tiene en la barra superior un interruptor que vale para toda la aplicación y para todos los usuarios: encendido (valor inicial), todas las páginas muestran el código seudónimo; apagado, muestran cédula y nombre. Solo tiene efecto si la base se cargó con identidades. Con el interruptor apagado, los docentes ven identidades únicamente si además se permite en *Configuración*.
 
 ---
