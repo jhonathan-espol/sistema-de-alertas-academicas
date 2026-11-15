@@ -23,7 +23,7 @@ from ml.config import CACHE, RAIZ, SALIDAS
 from ml.seguridad import hash_password
 
 USUARIOS_INICIALES = [  # contraseñas temporales: la aplicación obliga a cambiarlas en el primer ingreso
-    ("Administrador", "Administrador del sistema", "ADMINISTRADOR", "admin"),
+    ("Administrador", "Administrador", "ADMINISTRADOR", "admin"),
     ("Docente", "Docente", "DOCENTE", "docente123"),
 ]
 CONFIG_INICIAL = [

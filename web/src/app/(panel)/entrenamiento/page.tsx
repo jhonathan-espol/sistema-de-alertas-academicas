@@ -141,8 +141,7 @@ export default async function Entrenamiento({ searchParams }: { searchParams: Pr
             </tbody>
           </table></div>
         </section>
-
-        <div className="grid g-2">
+        
           <section className="tarjeta">
             <div className="tarjeta-cab"><div><h2>Robustez: un periodo fuera cada vez</h2><div className="sub">AUC-PR al predecir cada periodo con un modelo que no lo vio</div></div></div>
             <div className="tabla-scroll"><table>
@@ -168,7 +167,6 @@ export default async function Entrenamiento({ searchParams }: { searchParams: Pr
               </tbody>
             </table></div>
           </section>
-        </div>
 
         <section className="tarjeta">
           <div className="tarjeta-cab">

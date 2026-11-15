@@ -22,7 +22,6 @@ export default async function PanelLayout({ children }: { children: React.ReactN
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="M14 14l4 4" strokeLinecap="round" /></svg>
             <input name="q" placeholder="Buscar estudiante o carrera…" aria-label="Buscar" />
           </form>
-          <span className="sub">Apoyo a la decisión humana · no es una decisión automatizada</span>
         </div>
         {children}
       </div>
